@@ -4,18 +4,23 @@ import numpy as np
 import random
 import pandas as pd
 from ultralytics import YOLO
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 st.set_page_config(layout="wide")
-st.title("Trash Detection")
+st.title("♻️ Trash Detection – Webcam & Upload")
 
-#Load model
+# -------------------------
+# Load YOLO model
+# -------------------------
 @st.cache_resource
 def load_model():
     return YOLO("best.pt")
 
 yolo = load_model()
 
+# -------------------------
 # Helper functions
+# -------------------------
 def generate_color(cls_number: int):
     random.seed(cls_number)
     return (random.randint(0,255), random.randint(0,255), random.randint(0,255))
@@ -48,53 +53,33 @@ def process_yolo(img, min_conf):
             })
     return img, detections
 
-
-# Sidebar
+# -------------------------
+# Sidebar: settings
+# -------------------------
 st.sidebar.header("Cài đặt")
 mode = st.sidebar.radio("Chọn chế độ:", ["📷 Webcam", "🖼 Upload ảnh"])
 min_conf = st.sidebar.slider("Min confidence", 0.0, 1.0, 0.5, 0.01)
 
-# Webcam mode
+# -------------------------
+# Webcam mode (via WebRTC)
+# -------------------------
 if mode == "📷 Webcam":
-    st.subheader("Webcam")
-    run = st.checkbox("Bật camera")
-    frame_window = st.image([])
+    st.subheader("Webcam Streaming")
+    
+    class YOLOTransformer(VideoTransformerBase):
+        def __init__(self, min_conf):
+            self.min_conf = min_conf
+        def transform(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            img_out, detections = process_yolo(img.copy(), self.min_conf)
+            return img_out
 
-    cap = None
-    prev_time = 0
+    webrtc_streamer(key="trash-detect", video_transformer_factory=lambda: YOLOTransformer(min_conf))
 
-    if run:
-        cap = cv2.VideoCapture(0)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
-
-        if not cap.isOpened():
-            st.error("Không thể mở webcam")
-
-        stop_cam = st.button("Stop camera")
-
-        while run:
-            if stop_cam:
-                break
-            ret, frame = cap.read()
-            if not ret:
-                st.warning("Không lấy được frame")
-                break
-
-            frame, detections = process_yolo(frame.copy(), min_conf)
-
-            #Tính FPS
-            curr_time = cv2.getTickCount() / cv2.getTickFrequency()
-            fps = 1 / (curr_time - prev_time) if prev_time else 0
-            prev_time = curr_time
-            cv2.putText(frame, f"FPS: {fps:.1f}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-
-            frame_window.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-        if cap:
-            cap.release()
-#Upload multi-image mode
-elif mode == "Upload ảnh":
+# -------------------------
+# Upload multi-image mode
+# -------------------------
+elif mode == "🖼 Upload ảnh":
     st.subheader("Upload nhiều ảnh")
     uploaded_files = st.file_uploader("Chọn ảnh", type=["jpg","jpeg","png"], accept_multiple_files=True)
     all_detections = []
@@ -114,14 +99,12 @@ elif mode == "Upload ảnh":
             if detections:
                 df = pd.DataFrame(detections)
                 st.dataframe(df)
-                #Lưu tất cả detections
                 for det in detections:
                     det["image_name"] = uploaded_file.name
                 all_detections.extend(detections)
             else:
                 st.info("Không có vật nào vượt ngưỡng Min confidence.")
 
-        #tải CSV tất cả detections
         if all_detections:
             df_all = pd.DataFrame(all_detections)
             csv = df_all.to_csv(index=False).encode("utf-8")
