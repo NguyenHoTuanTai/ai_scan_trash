@@ -7,7 +7,7 @@ from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 st.set_page_config(layout="wide")
-st.title("♻️ Trash Detection – Webcam & Upload")
+st.title("Trash Detection – Webcam & Upload")
 
 # -------------------------
 # Load YOLO model
@@ -57,13 +57,13 @@ def process_yolo(img, min_conf):
 # Sidebar: settings
 # -------------------------
 st.sidebar.header("Cài đặt")
-mode = st.sidebar.radio("Chọn chế độ:", ["📷 Webcam", "🖼 Upload ảnh"])
+mode = st.sidebar.radio("Chọn chế độ:", ["Webcam", "Upload ảnh"])
 min_conf = st.sidebar.slider("Min confidence", 0.0, 1.0, 0.5, 0.01)
 
 # -------------------------
 # Webcam mode (via WebRTC)
 # -------------------------
-if mode == "📷 Webcam":
+if mode == "Webcam":
     st.subheader("Webcam Streaming")
     
     class YOLOTransformer(VideoTransformerBase):
@@ -79,7 +79,7 @@ if mode == "📷 Webcam":
 # -------------------------
 # Upload multi-image mode
 # -------------------------
-elif mode == "🖼 Upload ảnh":
+elif mode == "Upload ảnh":
     st.subheader("Upload nhiều ảnh")
     uploaded_files = st.file_uploader("Chọn ảnh", type=["jpg","jpeg","png"], accept_multiple_files=True)
     all_detections = []
@@ -109,3 +109,4 @@ elif mode == "🖼 Upload ảnh":
             df_all = pd.DataFrame(all_detections)
             csv = df_all.to_csv(index=False).encode("utf-8")
             st.download_button("Tải CSV toàn bộ detections", csv, file_name="detections_all.csv", mime="text/csv")
+
